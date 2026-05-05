@@ -2,8 +2,7 @@ GCP-deloyment Link: https://hat-plug-64058716019.us-central1.run.app/
 
 A Streamlit-based web application demonstrating CI/CD practices
 including automated testing, containerization, and deployment using
-GitHub Actions. This project was developed as part of the CodePath Tech
-Exchange Integrated Software Engineering (ISE) Lab 2.
+GitHub Actions.
 
 ------------------------------------------------------------------------
 
