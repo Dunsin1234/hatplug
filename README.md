@@ -74,7 +74,7 @@ supported by modular backend components and a CI/CD pipeline.
 
 ------------------------------------------------------------------------
 
-## Installation
+# Installation
 
 ### Clone the Repository
 
