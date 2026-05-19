@@ -65,7 +65,7 @@ supported by modular backend components and a CI/CD pipeline.
 
 ------------------------------------------------------------------------
 
-## Prerequisites
+# Prerequisites
 
 -   Python 3.7 or higher
 -   Docker (optional for containerized deployment)
