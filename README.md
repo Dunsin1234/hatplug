@@ -15,7 +15,7 @@ supported by modular backend components and a CI/CD pipeline.
 
 ------------------------------------------------------------------------
 
-## Features
+# Features
 
 -   **Streamlit Web Interface** -- Interactive frontend for displaying
     application data\
