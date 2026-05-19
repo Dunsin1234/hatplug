@@ -89,7 +89,7 @@ cd ise-lab2-cicd-moongroup
 bash setup.sh
 ```
 
-### Install Dependencies
+## Install Dependencies
 
 ``` bash
 pip install -r requirements.txt
