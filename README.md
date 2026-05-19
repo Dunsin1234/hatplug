@@ -30,7 +30,7 @@ supported by modular backend components and a CI/CD pipeline.
 
 ------------------------------------------------------------------------
 
-## Project Structure
+# Project Structure
 
     ise-lab2-cicd-moongroup/
     ├── app.py                 # Main Streamlit application
