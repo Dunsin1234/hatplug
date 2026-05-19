@@ -54,7 +54,7 @@ supported by modular backend components and a CI/CD pipeline.
 
 ------------------------------------------------------------------------
 
-## Tech Stack
+# Tech Stack
 
 -   Python 3.x
 -   Streamlit
