@@ -6,7 +6,7 @@ GitHub Actions.
 
 ------------------------------------------------------------------------
 
-## Overview
+# Overview
 
 This project showcases modern software development practices including
 continuous integration, continuous deployment, automated testing, and
