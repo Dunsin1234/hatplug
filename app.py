@@ -16,6 +16,7 @@ from modules import (
     display_cart_page,
     display_orders_page,
     display_genai_advice,
+    display_recommendation_cards,
     display_qa_section,
     display_reviews_section,
     inject_css,
@@ -106,10 +107,16 @@ def cart_rows_to_dict(rows):
 # Data loaders
 # ─────────────────────────────────────────────
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_product_rows():
+    """Catalog rows are cached for 5 minutes so every click doesn't hit BigQuery."""
+    return get_products()
+
+
 def load_live_products():
-    """Fetches all products from BigQuery and normalises them."""
+    """Fetches all products from BigQuery (cached) and normalises them."""
     try:
-        rows = get_products()
+        rows = _cached_product_rows()
         return normalize_products(rows)
     except Exception as e:
         st.warning(f"Could not load products from the database: {e}")
@@ -153,10 +160,11 @@ def sync_db_cart_into_session():
 
 
 def load_live_advice():
-    """Generates GenAI style advice via Vertex AI / Gemini."""
+    """Asks the Style Coach for catalog-grounded picks. Returns (recs, source)."""
     try:
         cart_enriched = [
             {
+                "product_id": pid,
                 "name": next((p["name"] for p in products if p["id"] == pid), pid),
                 "style": next((p.get("style", "") for p in products if p["id"] == pid), ""),
                 "color": next((p.get("color", "") for p in products if p["id"] == pid), ""),
@@ -164,10 +172,13 @@ def load_live_advice():
             }
             for pid, qty in st.session_state.cart.items()
         ]
-        result = get_genai_recommendations(USER_ID, cart_items=cart_enriched)
-        return result.get("recommendations", "No style advice returned.")
+        result = get_genai_recommendations(
+            USER_ID, cart_items=cart_enriched, products=products
+        )
+        return result["recommendations"], result["source"]
     except Exception as e:
-        return f"Could not load live style advice right now.\n\n{e}"
+        st.warning(f"Could not load style advice right now: {e}")
+        return [], "error"
 
 
 # ─────────────────────────────────────────────
@@ -190,6 +201,12 @@ if "advice_content" not in st.session_state:
     st.session_state.advice_content = (
         "Click the button below to generate live style advice."
     )
+
+if "advice_recs" not in st.session_state:
+    st.session_state.advice_recs = []
+
+if "advice_source" not in st.session_state:
+    st.session_state.advice_source = None
 
 if "advice_image" not in st.session_state:
     st.session_state.advice_image = "assets/coach.jpg"
@@ -334,15 +351,27 @@ elif st.session_state.page == "advice":
 
     if st.button("✨ Generate Live Advice", use_container_width=True):
         with st.spinner("Asking your style coach…"):
-            st.session_state.advice_content = load_live_advice()
+            recs, source = load_live_advice()
+            st.session_state.advice_recs = recs
+            st.session_state.advice_source = source
             st.session_state.advice_timestamp = datetime.now().strftime(
                 "%Y-%m-%d %I:%M %p"
             )
         st.rerun()
 
-    display_genai_advice(
-        st.session_state.advice_timestamp,
-        st.session_state.advice_content,
-        st.session_state.advice_image,
-    )
+    st.markdown('<p class="hs-eyebrow">Powered by AI</p>', unsafe_allow_html=True)
+    st.title("Style Coach")
+    st.caption(f"Generated: {st.session_state.advice_timestamp}")
+    if st.session_state.advice_source == "fallback":
+        st.caption("AI was unavailable, so these picks are based on your past styles and colors.")
 
+    if st.session_state.advice_recs:
+        view_id = display_recommendation_cards(
+            st.session_state.advice_recs, products, st.session_state.cart
+        )
+        if view_id:
+            st.session_state.selected_product_id = view_id
+            st.session_state.page = "detail"
+            st.rerun()
+    else:
+        st.info(st.session_state.advice_content)

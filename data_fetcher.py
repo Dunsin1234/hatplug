@@ -6,7 +6,7 @@
 
 from google.cloud import bigquery
 import vertexai
-from vertexai.generative_models import GenerativeModel
+from vertexai.generative_models import GenerativeModel, GenerationConfig
 import os
 import json
 
@@ -188,45 +188,193 @@ def create_order(user_id, product_id, quantity):
     return run_query(query, params)
 
 # ==============================
+# ORDERS: PLACE A WHOLE CART
+# ==============================
+def place_order(user_id, cart):
+    """
+    Persists every line of a {product_id: quantity} cart to the orders table.
+    Returns the list of product_ids that failed to save (empty list = success),
+    so the caller can keep the cart intact instead of silently losing an order.
+    """
+    failed = []
+    for product_id, quantity in cart.items():
+        try:
+            create_order(user_id, product_id, int(quantity))
+        except Exception as e:
+            print(f"Order write failed for {product_id}: {e}")
+            failed.append(product_id)
+    return failed
+
+# ==============================
 # AI RECOMMENDATIONS
 # ==============================
-def get_genai_recommendations(user_id, cart_items=None):
+NUM_RECOMMENDATIONS = 3
+
+RECOMMENDATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "recommendations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "string"},
+                    "style_note": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["product_id", "style_note", "reason"],
+            },
+        }
+    },
+    "required": ["recommendations"],
+}
+
+
+def _owned_ids(cart, orders):
+    """Product ids the user already has in their cart or has ordered."""
+    ids = set()
+    for item in cart or []:
+        pid = item.get("product_id") or item.get("id")
+        if pid:
+            ids.add(str(pid))
+    for order in orders or []:
+        pid = order.get("product_id")
+        if pid:
+            ids.add(str(pid))
+    return ids
+
+
+def build_candidate_catalog(products, owned_ids):
+    """In-stock products the user does not already own. This is the ONLY set
+    the model may recommend from, so every recommendation is a real product."""
+    candidates = []
+    for p in products or []:
+        pid = str(p.get("product_id") or p.get("id") or "")
+        if not pid or pid in owned_ids:
+            continue
+        try:
+            if int(p.get("stock", 1) or 0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            pass
+        candidates.append({
+            "product_id": pid,
+            "name": p.get("name", ""),
+            "style": p.get("style", ""),
+            "color": p.get("color", ""),
+            "price": p.get("price", 0),
+            "description": p.get("description", ""),
+        })
+    return candidates
+
+
+def parse_recommendations(raw_text, candidates):
+    """
+    Validates model output against the catalog. Drops unknown or duplicate
+    product ids and caps the list at NUM_RECOMMENDATIONS. Returns [] if the
+    text is not valid JSON in the expected shape.
+    """
+    by_id = {c["product_id"]: c for c in candidates}
+    try:
+        data = json.loads(raw_text)
+        items = data["recommendations"] if isinstance(data, dict) else data
+    except (TypeError, ValueError, KeyError):
+        return []
+
+    results, seen = [], set()
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        pid = str(item.get("product_id", ""))
+        if pid not in by_id or pid in seen:
+            continue
+        seen.add(pid)
+        results.append({
+            "product_id": pid,
+            "name": by_id[pid]["name"],
+            "style_note": str(item.get("style_note", "")).strip(),
+            "reason": str(item.get("reason", "")).strip(),
+        })
+        if len(results) == NUM_RECOMMENDATIONS:
+            break
+    return results
+
+
+def fallback_recommendations(candidates, cart, orders, products):
+    """Rule-based picks used when Gemini is unavailable or returns bad output:
+    prefer styles and colors the user already shows interest in."""
+    prefs = {"style": set(), "color": set()}
+    owned = _owned_ids(cart, orders)
+    for p in products or []:
+        if str(p.get("product_id") or p.get("id")) in owned:
+            for key in prefs:
+                if p.get(key):
+                    prefs[key].add(str(p[key]).lower())
+
+    def score(c):
+        return ((str(c["style"]).lower() in prefs["style"]) * 2
+                + (str(c["color"]).lower() in prefs["color"]))
+
+    ranked = sorted(candidates, key=score, reverse=True)[:NUM_RECOMMENDATIONS]
+    return [{
+        "product_id": c["product_id"],
+        "name": c["name"],
+        "style_note": f"{c['color']} {c['style']}".strip(),
+        "reason": "Matches the styles and colors you already like."
+                  if score(c) else "A popular pick from the collection.",
+    } for c in ranked]
+
+
+def get_genai_recommendations(user_id, cart_items=None, products=None):
+    """
+    Returns {"user_id", "source", "recommendations": [...]} where each
+    recommendation is {product_id, name, style_note, reason} for a real,
+    in-stock product the user does not already own.
+    source is "gemini" or "fallback".
+    """
     cart = cart_items if cart_items is not None else get_cart(user_id)
     orders = get_orders(user_id)
+    catalog = products if products is not None else get_products()
+
+    candidates = build_candidate_catalog(catalog, _owned_ids(cart, orders))
+    if not candidates:
+        return {"user_id": user_id, "source": "fallback", "recommendations": []}
 
     prompt = f"""
-    You are a fashion stylist specializing in hats.
+    You are a friendly fashion stylist for an HBCU campus hat store.
 
-    The user currently has these hats in their cart:
-    {cart}
+    The user's cart: {cart}
+    The user's past orders: {orders}
 
-    They have previously ordered these hats:
-    {orders}
+    Recommend exactly {NUM_RECOMMENDATIONS} hats from this list of available
+    products. Use ONLY product_id values from this list:
+    {json.dumps(candidates)}
 
-    Give personalised style advice ONLY based on the hats above.
-    Do not recommend new hats to buy. Instead:
-    - Suggest outfits, occasions, or looks that suit the hats they already own or are buying
-    - Point out how their hats can be mixed and matched
-    - Give one specific tip per hat if possible
-
-    Keep the tone friendly, confident, and concise.
-    If the cart and order history are both empty, politely tell the user to add some hats first before asking for style advice.
+    For each, give a short style_note (how to wear it) and a reason it fits
+    this user's taste. If the user has no history, pick a varied starter set.
     """
 
-    if genai_model is None:
-        return {"user_id": user_id, "recommendations": []}
+    recommendations = []
+    if genai_model is not None:
+        try:
+            response = genai_model.generate_content(
+                prompt,
+                generation_config=GenerationConfig(
+                    response_mime_type="application/json",
+                    response_schema=RECOMMENDATION_SCHEMA,
+                    temperature=0.7,
+                ),
+            )
+            recommendations = parse_recommendations(response.text, candidates)
+        except Exception as e:
+            print(f"Gemini recommendation error: {e}")
 
-    response = genai_model.generate_content(prompt)
+    source = "gemini"
+    if not recommendations:
+        source = "fallback"
+        recommendations = fallback_recommendations(candidates, cart, orders, catalog)
 
-    try:
-        recommendations = json.loads(response.text)
-    except:
-        recommendations = response.text  
-
-    return {
-        "user_id": user_id,
-        "recommendations": recommendations
-    }
+    return {"user_id": user_id, "source": source, "recommendations": recommendations}
 
 # ==============================
 # Q&A
