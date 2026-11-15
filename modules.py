@@ -4,6 +4,7 @@
 # This file contains modules that may be used throughout the app.
 #############################################################################
 import os
+import html
 import streamlit as st
 from typing import List, Dict, Optional, Any
 from pathlib import Path
@@ -560,6 +561,13 @@ def display_cart_page(cart: Dict, products: List[Dict], user_id: str = "user1"):
             st.session_state.order_history.append(new_order)
  
             msg = checkout_message(cart, products)
+            failed = data_fetcher.place_order(user_id, dict(cart))
+            if failed:
+                st.error(
+                    "We couldn't save your order, so your cart was left as it is. "
+                    "Please try again."
+                )
+                return
             try:
                 clear_cart(user_id)
             except Exception as e:
@@ -679,6 +687,56 @@ def display_genai_advice(timestamp: str, content: str, motivational_image: str):
     st.divider()
     st.caption("Tip: Pair your favorite cap with confidence — you got this. 🧢")
 
+def display_recommendation_cards(recommendations, products, cart):
+    """
+    Renders Style Coach picks as cards. Each card links to a real product:
+    'View' opens its detail page, 'Add to cart' adds one unit.
+    Returns the product_id whose 'View' button was clicked, else None.
+    """
+    inject_css()
+    if not recommendations:
+        st.info("No recommendations right now. Check back after the catalog updates.")
+        return None
+
+    clicked = None
+    cols = st.columns(len(recommendations), gap="medium")
+    for col, rec in zip(cols, recommendations):
+        product = get_product_by_id(products, rec["product_id"])
+        if not product:
+            continue
+        with col:
+            with st.container(border=True):
+                img = product.get("image", "")
+                img_path = os.path.join("assets", img)
+                if os.path.exists(img_path):
+                    st.image(img_path, use_container_width=True)
+                elif str(img).startswith(("http://", "https://")):
+                    try:
+                        st.image(img, use_container_width=True)
+                    except Exception:
+                        pass
+                st.markdown(
+                    f'<p class="hs-cart-name">{html.escape(product["name"])}</p>'
+                    f'<p class="hs-price">${product["price"]:.2f}</p>',
+                    unsafe_allow_html=True,
+                )
+                if rec.get("style_note"):
+                    st.caption(f"Style: {rec['style_note']}")
+                if rec.get("reason"):
+                    st.write(rec["reason"])
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("View", key=f"rec_view_{rec['product_id']}",
+                                 use_container_width=True):
+                        clicked = rec["product_id"]
+                with b2:
+                    if st.button("Add to cart", key=f"rec_add_{rec['product_id']}",
+                                 use_container_width=True, type="primary"):
+                        add_to_cart(cart, rec["product_id"], 1)
+                        st.success("Added to cart.")
+    return clicked
+
+
 # ==============================
 # Q&A 
 # ==============================
@@ -750,8 +808,8 @@ def display_qa_section(product_id: str, current_user: str = "guest"):
                     # Answer bubble — reuses hs-coach-tip style
                     st.markdown(
                         f"""<div class="hs-coach-tip">
-                            <strong>A:</strong> {a_body}<br>
-                            <small style="color:#7B5B3A;">— {a_auth} · {a_time}</small>
+                            <strong>A:</strong> {html.escape(a_body)}<br>
+                            <small style="color:#7B5B3A;">— {html.escape(str(a_auth))} · {a_time}</small>
                         </div>""",
                         unsafe_allow_html=True,
                     )
@@ -763,9 +821,9 @@ def display_qa_section(product_id: str, current_user: str = "guest"):
                             f"""<div style="background:#FAF6F0;border-left:3px solid #C8B89A;
                                             padding:6px 12px;border-radius:0 6px 6px 0;
                                             margin:4px 0 4px 24px;">
-                                <strong>↩</strong> {reply.get('body', '')}<br>
+                                <strong>↩</strong> {html.escape(str(reply.get('body', '')))}<br>
                                 <small style="color:#A0785A;">
-                                    — {reply.get('author', 'anonymous')} · {str(reply.get('created_at', ''))[:16]}
+                                    — {html.escape(str(reply.get('author', 'anonymous')))} · {str(reply.get('created_at', ''))[:16]}
                                 </small>
                             </div>""",
                             unsafe_allow_html=True,
