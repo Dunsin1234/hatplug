@@ -48,12 +48,24 @@ jobs:
     # Same two steps as manual-deploy.sh: build in Cloud Build, then deploy.
     - name: 'Build image with Cloud Build'
       run: |
-        # --suppress-logs: the deploy account can't stream logs, but the command
-        # still waits for the build and fails if it fails. The "Logs are
-        # available at" link in the output opens the build in the console.
-        gcloud builds submit --suppress-logs \
+        # Start the build without streaming logs (the deploy account can't read
+        # them), then poll its status. The console link opens the full build log.
+        BUILD_ID=$(gcloud builds submit --async --format='value(id)' \
           --project "${PROJECT_ID}" \
-          --tag "gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+          --tag "gcr.io/${PROJECT_ID}/${SERVICE_NAME}")
+        echo "Build ${BUILD_ID}"
+        echo "https://console.cloud.google.com/cloud-build/builds/${BUILD_ID}?project=${PROJECT_ID}"
+        for i in $(seq 1 180); do   # up to 30 minutes
+          STATUS=$(gcloud builds describe "${BUILD_ID}" --project "${PROJECT_ID}" --format='value(status)')
+          echo "[$i] ${STATUS}"
+          case "${STATUS}" in
+            SUCCESS) exit 0 ;;
+            FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+              echo "Build did not succeed. Open the link above for the log."; exit 1 ;;
+          esac
+          sleep 10
+        done
+        echo "Timed out waiting for the build."; exit 1
 
     - name: 'Deploy to Cloud Run'
       run: |
