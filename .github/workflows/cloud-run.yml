@@ -48,7 +48,10 @@ jobs:
     # Same two steps as manual-deploy.sh: build in Cloud Build, then deploy.
     - name: 'Build image with Cloud Build'
       run: |
-        gcloud builds submit \
+        # --suppress-logs: the deploy account can't stream logs, but the command
+        # still waits for the build and fails if it fails. The "Logs are
+        # available at" link in the output opens the build in the console.
+        gcloud builds submit --suppress-logs \
           --project "${PROJECT_ID}" \
           --tag "gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 
