@@ -22,9 +22,12 @@ from modules import (
     inject_css,
 )
 from catalog_filter import display_catalog_filter
+from auth import current_user, render_account_bar, require_login
 from data_fetcher import (
     get_products,
     get_cart,
+    upsert_cart_item,
+    delete_cart_item,
     get_orders,
     get_genai_recommendations,
 )
@@ -34,7 +37,6 @@ from data_fetcher import (
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Hat Plug", layout="wide", page_icon="🧢")
 
-USER_ID      = "user1"
 DEFAULT_IMAGE = "https://via.placeholder.com/300x300?text=No+Image"
 
 
@@ -147,8 +149,8 @@ def load_live_products():
 
 def sync_db_cart_into_session():
     """
-    Merges the DB cart into the session cart on page load.
-    Items already in session are not overwritten so local edits survive.
+    Demo-mode helper (shared guest account): merges the DB cart into the
+    session cart. Items already in session are not overwritten.
     """
     try:
         db_cart = cart_rows_to_dict(get_cart(USER_ID))
@@ -157,6 +159,38 @@ def sync_db_cart_into_session():
                 st.session_state.cart[product_id] = qty
     except Exception as e:
         st.warning(f"Could not load cart from the database: {e}")
+
+
+def load_user_cart_once():
+    """Signed-in users: load their saved cart from BigQuery once per session."""
+    if st.session_state.get("_cart_loaded_for") == USER_ID:
+        return
+    try:
+        st.session_state.cart = cart_rows_to_dict(get_cart(USER_ID))
+    except Exception as e:
+        st.warning(f"Could not load your saved cart: {e}")
+        st.session_state.cart = init_cart()
+    st.session_state._synced_cart = dict(st.session_state.cart)
+    st.session_state._cart_loaded_for = USER_ID
+
+
+def persist_cart_changes():
+    """
+    Signed-in users: write whatever changed in the session cart to BigQuery,
+    so the cart survives refreshes and logging in on another device.
+    """
+    before = st.session_state.get("_synced_cart", {})
+    now = st.session_state.cart
+    try:
+        for pid, qty in now.items():
+            if before.get(pid) != qty:
+                upsert_cart_item(USER_ID, pid, int(qty))
+        for pid in before:
+            if pid not in now:
+                delete_cart_item(USER_ID, pid)
+        st.session_state._synced_cart = dict(now)
+    except Exception as e:
+        st.warning(f"Could not save your cart: {e}")
 
 
 def load_live_advice():
@@ -180,6 +214,14 @@ def load_live_advice():
         st.warning(f"Could not load style advice right now: {e}")
         return [], "error"
 
+
+# ─────────────────────────────────────────────
+# Identity (signed-in Google user, or shared guest in demo mode)
+# ─────────────────────────────────────────────
+
+USER = current_user()
+USER_ID = USER["user_id"]
+CAN_POST = not (USER["auth_enabled"] and USER["is_guest"])
 
 # ─────────────────────────────────────────────
 # Session state initialisation
@@ -229,6 +271,20 @@ if "reviews" not in st.session_state:
         ]
     }
 
+if st.session_state.get("_session_user") != USER_ID:
+    # a different person is now using this session (sign in / sign out)
+    if "_session_user" in st.session_state:
+        st.session_state.cart = init_cart()
+        st.session_state.advice_recs = []
+        st.session_state.advice_source = None
+        st.session_state.advice_timestamp = "Not generated yet"
+        st.session_state.page = "home"
+    st.session_state._session_user = USER_ID
+
+if not USER["is_guest"]:
+    load_user_cart_once()
+    persist_cart_changes()
+
 # ─────────────────────────────────────────────
 # Load products (every render)
 # ─────────────────────────────────────────────
@@ -239,6 +295,8 @@ inject_css()
 # ─────────────────────────────────────────────
 # Top navigation bar
 # ─────────────────────────────────────────────
+
+render_account_bar(USER)
 
 nav = st.columns([4, 1, 1, 1])
 
@@ -302,10 +360,16 @@ elif st.session_state.page == "detail":
         display_product_detail(product, st.session_state.cart)
         display_qa_section(
             product_id=st.session_state.selected_product_id,
-            current_user=USER_ID,
+            current_user=USER["name"] if not USER["is_guest"] else USER_ID,
+            can_post=CAN_POST,
         )
 
-        display_reviews_section(product["id"])
+        display_reviews_section(
+            product["id"],
+            user_id=USER_ID,
+            user_name="" if USER["is_guest"] else USER["name"],
+            can_post=CAN_POST,
+        )
 
         col1, col2 = st.columns(2)
         with col1:
@@ -324,8 +388,10 @@ elif st.session_state.page == "cart":
         st.session_state.page = "home"
         st.rerun()
 
-    sync_db_cart_into_session()
-    display_cart_page(st.session_state.cart, products, user_id=USER_ID)
+    if require_login(USER, "your cart"):
+        if USER["is_guest"]:
+            sync_db_cart_into_session()
+        display_cart_page(st.session_state.cart, products, user_id=USER_ID)
 
 
 # ── Orders ────────────────────────────────────
@@ -334,13 +400,14 @@ elif st.session_state.page == "orders":
         st.session_state.page = "home"
         st.rerun()
 
-    try:
-        orders = get_orders(USER_ID)
-    except Exception as e:
-        st.error(f"Could not load orders from the database: {e}")
-        orders = []
+    if require_login(USER, "your orders"):
+        try:
+            orders = get_orders(USER_ID)
+        except Exception as e:
+            st.error(f"Could not load orders from the database: {e}")
+            orders = []
 
-    display_orders_page(orders, products)
+        display_orders_page(orders, products)
 
 
 # ── Style Coach ───────────────────────────────
@@ -349,29 +416,35 @@ elif st.session_state.page == "advice":
         st.session_state.page = "home"
         st.rerun()
 
-    if st.button("✨ Generate Live Advice", use_container_width=True):
-        with st.spinner("Asking your style coach…"):
-            recs, source = load_live_advice()
-            st.session_state.advice_recs = recs
-            st.session_state.advice_source = source
-            st.session_state.advice_timestamp = datetime.now().strftime(
-                "%Y-%m-%d %I:%M %p"
-            )
-        st.rerun()
-
-    st.markdown('<p class="hs-eyebrow">Powered by AI</p>', unsafe_allow_html=True)
-    st.title("Style Coach")
-    st.caption(f"Generated: {st.session_state.advice_timestamp}")
-    if st.session_state.advice_source == "fallback":
-        st.caption("AI was unavailable, so these picks are based on your past styles and colors.")
-
-    if st.session_state.advice_recs:
-        view_id = display_recommendation_cards(
-            st.session_state.advice_recs, products, st.session_state.cart
-        )
-        if view_id:
-            st.session_state.selected_product_id = view_id
-            st.session_state.page = "detail"
+    if require_login(USER, "the Style Coach"):
+        if st.button("✨ Generate Live Advice", use_container_width=True):
+            with st.spinner("Asking your style coach…"):
+                recs, source = load_live_advice()
+                st.session_state.advice_recs = recs
+                st.session_state.advice_source = source
+                st.session_state.advice_timestamp = datetime.now().strftime(
+                    "%Y-%m-%d %I:%M %p"
+                )
             st.rerun()
-    else:
-        st.info(st.session_state.advice_content)
+
+        st.markdown('<p class="hs-eyebrow">Powered by AI</p>', unsafe_allow_html=True)
+        st.title("Style Coach")
+        st.caption(f"Generated: {st.session_state.advice_timestamp}")
+        if st.session_state.advice_source == "fallback":
+            st.caption("AI was unavailable, so these picks are based on your past styles and colors.")
+
+        if st.session_state.advice_recs:
+            view_id = display_recommendation_cards(
+                st.session_state.advice_recs, products, st.session_state.cart
+            )
+            if view_id:
+                st.session_state.selected_product_id = view_id
+                st.session_state.page = "detail"
+                st.rerun()
+        else:
+            st.info(st.session_state.advice_content)
+
+
+# Save any cart changes made during this run (signed-in users only)
+if not USER["is_guest"]:
+    persist_cart_changes()

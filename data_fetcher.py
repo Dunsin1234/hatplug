@@ -16,6 +16,7 @@ import json
 PROJECT_ID = os.getenv("PROJECT_ID", "oluwadunsin-adesanya-fisk")
 DATASET = "hatplugquery"
 LOCATION = "us-central1"
+GUEST_IDS = {"user1", "guest"}  # shared demo accounts
 
 # ==============================
 # CLIENTS
@@ -44,6 +45,16 @@ def run_query(query, params=None):
     results = bq_client.query(query, job_config=job_config).result()
 
     return [dict(row) for row in results]
+
+def run_dml(query, params=None):
+    """Runs an INSERT/UPDATE/DELETE and returns the number of rows affected."""
+    if bq_client is None:
+        return 0
+
+    job_config = bigquery.QueryJobConfig(query_parameters=params or [])
+    job = bq_client.query(query, job_config=job_config)
+    job.result()
+    return job.num_dml_affected_rows or 0
 
 # ==============================
 # PRODUCTS
@@ -325,6 +336,39 @@ def fallback_recommendations(candidates, cart, orders, products):
     } for c in ranked]
 
 
+def build_recommendation_prompt(cart, orders, candidates):
+    """Builds the Style Coach prompt. Kept separate so it can be evaluated."""
+    return f"""
+    You are a friendly fashion stylist for an HBCU campus hat store.
+
+    The user's cart: {cart}
+    The user's past orders: {orders}
+
+    Recommend exactly {NUM_RECOMMENDATIONS} hats from this list of available
+    products. Use ONLY product_id values from this list:
+    {json.dumps(candidates)}
+
+    For each, give a short style_note (how to wear it) and a reason it fits
+    this user's taste. If the user has no history, pick a varied starter set.
+    """
+
+
+def call_gemini(prompt):
+    """Calls Gemini with the JSON response schema and returns the raw text.
+    Raises RuntimeError if the model is not initialised."""
+    if genai_model is None:
+        raise RuntimeError("Gemini model is not initialised")
+    response = genai_model.generate_content(
+        prompt,
+        generation_config=GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=RECOMMENDATION_SCHEMA,
+            temperature=0.7,
+        ),
+    )
+    return response.text
+
+
 def get_genai_recommendations(user_id, cart_items=None, products=None):
     """
     Returns {"user_id", "source", "recommendations": [...]} where each
@@ -340,34 +384,13 @@ def get_genai_recommendations(user_id, cart_items=None, products=None):
     if not candidates:
         return {"user_id": user_id, "source": "fallback", "recommendations": []}
 
-    prompt = f"""
-    You are a friendly fashion stylist for an HBCU campus hat store.
-
-    The user's cart: {cart}
-    The user's past orders: {orders}
-
-    Recommend exactly {NUM_RECOMMENDATIONS} hats from this list of available
-    products. Use ONLY product_id values from this list:
-    {json.dumps(candidates)}
-
-    For each, give a short style_note (how to wear it) and a reason it fits
-    this user's taste. If the user has no history, pick a varied starter set.
-    """
+    prompt = build_recommendation_prompt(cart, orders, candidates)
 
     recommendations = []
-    if genai_model is not None:
-        try:
-            response = genai_model.generate_content(
-                prompt,
-                generation_config=GenerationConfig(
-                    response_mime_type="application/json",
-                    response_schema=RECOMMENDATION_SCHEMA,
-                    temperature=0.7,
-                ),
-            )
-            recommendations = parse_recommendations(response.text, candidates)
-        except Exception as e:
-            print(f"Gemini recommendation error: {e}")
+    try:
+        recommendations = parse_recommendations(call_gemini(prompt), candidates)
+    except Exception as e:
+        print(f"Gemini recommendation error: {e}")
 
     source = "gemini"
     if not recommendations:
@@ -375,6 +398,107 @@ def get_genai_recommendations(user_id, cart_items=None, products=None):
         recommendations = fallback_recommendations(candidates, cart, orders, catalog)
 
     return {"user_id": user_id, "source": source, "recommendations": recommendations}
+
+# ==============================
+# REVIEWS
+# ==============================
+REVIEWS_TABLE = f"`{PROJECT_ID}.{DATASET}.product_reviews`"
+MAX_REVIEW_CHARS = 2000
+_reviews_table_ready = False
+
+
+def ensure_reviews_table():
+    """Creates the product_reviews table on first use (no-op afterwards)."""
+    global _reviews_table_ready
+    if _reviews_table_ready or bq_client is None:
+        return
+    run_query(f"""
+        CREATE TABLE IF NOT EXISTS {REVIEWS_TABLE} (
+          review_id         STRING NOT NULL,
+          product_id        STRING NOT NULL,
+          user_id           STRING NOT NULL,
+          author            STRING,
+          rating            INT64  NOT NULL,
+          body              STRING,
+          fit               STRING,
+          quality           STRING,
+          shipping          STRING,
+          verified_purchase BOOL,
+          created_at        TIMESTAMP
+        )
+    """)
+    _reviews_table_ready = True
+
+
+def get_reviews(product_id):
+    """Reviews for a product, newest first."""
+    ensure_reviews_table()
+    query = f"""
+        SELECT *
+        FROM {REVIEWS_TABLE}
+        WHERE product_id = @product_id
+        ORDER BY created_at DESC
+    """
+    params = [bigquery.ScalarQueryParameter("product_id", "STRING", str(product_id))]
+    return run_query(query, params)
+
+
+def add_review(product_id, user_id, author, rating, body,
+               fit="Good", quality="Good", shipping="On time"):
+    """
+    Saves a review. 'verified_purchase' is computed in SQL from the orders
+    table, so a reviewer cannot claim it. A signed-in user can leave one review
+    per product. Returns (saved: bool, message: str).
+    """
+    body = (body or "").strip()
+    author = (author or "").strip()
+    try:
+        rating = int(rating)
+    except (TypeError, ValueError):
+        return False, "Please pick a rating from 1 to 5."
+    if not 1 <= rating <= 5:
+        return False, "Please pick a rating from 1 to 5."
+    if not body or not author:
+        return False, "Please enter your name and your review."
+    if len(body) > MAX_REVIEW_CHARS:
+        return False, f"Reviews are limited to {MAX_REVIEW_CHARS} characters."
+
+    ensure_reviews_table()
+    query = f"""
+        INSERT INTO {REVIEWS_TABLE}
+          (review_id, product_id, user_id, author, rating, body, fit, quality,
+           shipping, verified_purchase, created_at)
+        SELECT
+          GENERATE_UUID(), @product_id, @user_id, @author, @rating, @body,
+          @fit, @quality, @shipping,
+          EXISTS (
+            SELECT 1 FROM `{PROJECT_ID}.{DATASET}.orders`
+            WHERE user_id = @user_id AND product_id = @product_id
+          ),
+          CURRENT_TIMESTAMP()
+        FROM (SELECT 1)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM {REVIEWS_TABLE}
+          WHERE user_id = @user_id AND product_id = @product_id
+            AND @one_per_user
+        )
+    """
+    params = [
+        bigquery.ScalarQueryParameter("product_id", "STRING", str(product_id)),
+        bigquery.ScalarQueryParameter("user_id", "STRING", user_id),
+        bigquery.ScalarQueryParameter("author", "STRING", author[:80]),
+        bigquery.ScalarQueryParameter("rating", "INT64", rating),
+        bigquery.ScalarQueryParameter("body", "STRING", body),
+        bigquery.ScalarQueryParameter("fit", "STRING", fit),
+        bigquery.ScalarQueryParameter("quality", "STRING", quality),
+        bigquery.ScalarQueryParameter("shipping", "STRING", shipping),
+        # the shared demo/guest account may post more than once
+        bigquery.ScalarQueryParameter("one_per_user", "BOOL", user_id not in GUEST_IDS),
+    ]
+    saved = run_dml(query, params)
+    if not saved:
+        return False, "You've already reviewed this product."
+    return True, "Review submitted!"
 
 # ==============================
 # Q&A

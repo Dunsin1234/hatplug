@@ -4,18 +4,18 @@ name: Cloud Run Continuous Deployment
 
 on:
   push:
-    # TODO: change 'none' to 'main' to enable the workflow to run
-    branches: 'none'
+    branches: ['main']
   release:
     types: [published]
 
 env:
-  # TODO: Paste output from setup.sh below.
-  PROJECT_ID: ''
-  SERVICE_NAME: ''
-  SERVICE_REGION: ''
-  SERVICE_ACCOUNT: ''
-  WORKLOAD_IDENTITY_PROVIDER: ''
+  PROJECT_ID: oluwadunsin-adesanya-fisk
+  SERVICE_NAME: hat-plug
+  SERVICE_REGION: us-central1
+  # Set these two as GitHub repository variables (Settings > Secrets and
+  # variables > Actions > Variables). scripts/setup-github-deploy.sh prints them.
+  SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+  WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
 
 jobs:
   py-checks:
@@ -45,22 +45,23 @@ jobs:
         project_id: '${{ env.PROJECT_ID }}'
         version: '>= 363.0.0'
 
-    - name: 'Configure docker for GCP'
-      run: 'gcloud auth configure-docker'
+    # Same two steps as manual-deploy.sh: build in Cloud Build, then deploy.
+    - name: 'Build image with Cloud Build'
+      run: |
+        gcloud builds submit \
+          --project "${PROJECT_ID}" \
+          --tag "gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 
-    - name: 'Build and push Docker image'
-      uses: 'docker/build-push-action@v5'
-      with:
-        context: .
-        push: true
-        tags: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}'
+    - name: 'Deploy to Cloud Run'
+      run: |
+        gcloud run deploy "${SERVICE_NAME}" \
+          --project "${PROJECT_ID}" \
+          --image "gcr.io/${PROJECT_ID}/${SERVICE_NAME}:latest" \
+          --region "${SERVICE_REGION}" \
+          --allow-unauthenticated
 
-    - id: 'Deploy'
-      uses: 'google-github-actions/deploy-cloudrun@v2'
-      with:
-        service: '${{ env.SERVICE_NAME }}'
-        image: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest'
-        region: '${{ env.SERVICE_REGION }}'
-
-    - name: 'Display deployed app URL'
-      run: 'curl "${{ steps.deploy.outputs.url }}"'
+    - name: 'Show deployed URL'
+      run: |
+        gcloud run services describe "${SERVICE_NAME}" \
+          --project "${PROJECT_ID}" --region "${SERVICE_REGION}" \
+          --format='value(status.url)'

@@ -217,3 +217,9 @@ details.
 **Project:** CodePath Tech Exchange -- Integrated Software Engineering
 Lab 2\
 **Last Updated:** March 2026
+
+## More docs
+
+- [AUTH_SETUP.md](AUTH_SETUP.md): turn on Google sign-in (per-user carts, orders and Style Coach)
+- [DEPLOY.md](DEPLOY.md): automatic deploys to Cloud Run when you push to `main`
+- [evaluation/README.md](evaluation/README.md): evaluating the Style Coach against baselines
