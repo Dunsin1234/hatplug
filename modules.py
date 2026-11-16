@@ -331,104 +331,81 @@ def display_product_detail(product: Dict, cart: Dict):
 # Review section UI
 # ---------------------------
 
-def display_reviews_section(product_id: str):
-    """Shows recent reviews first, then the review form."""
+def display_reviews_section(product_id: str, user_id: str = "guest",
+                            user_name: str = "", can_post: bool = True):
+    """
+    Shows saved reviews (newest first) and a review form.
+    Reviews live in BigQuery. 'Verified purchase' is decided by the database
+    from the user's order history, not by anything the reviewer types.
+    """
     inject_css()
 
     st.divider()
     st.markdown('<p class="hs-eyebrow">Customer feedback</p>', unsafe_allow_html=True)
     st.subheader("Reviews")
 
-    if "reviews" not in st.session_state:
-        st.session_state.reviews = {}
+    try:
+        product_reviews = data_fetcher.get_reviews(product_id)
+    except Exception as e:
+        st.warning(f"Could not load reviews right now: {e}")
+        product_reviews = []
 
-    if product_id not in st.session_state.reviews:
-        st.session_state.reviews[product_id] = []
+    if product_reviews:
+        avg = sum(r.get("rating", 0) for r in product_reviews) / len(product_reviews)
+        st.caption(f"{avg:.1f} / 5 average from {len(product_reviews)} review(s)")
 
-    product_reviews = st.session_state.reviews.get(product_id, [])
-
-    # Recent reviews first
     st.markdown("### Recent reviews")
-
     if not product_reviews:
         st.info("No reviews yet.")
     else:
-        for review in reversed(product_reviews):
-            verified_tag = "✅ Verified" if review["verified"] else "❌ Non-verified"
-            stars = "⭐" * review["rating"]
-
+        for review in product_reviews:
+            verified_tag = "✅ Verified purchase" if review.get("verified_purchase") else "Not a verified purchase"
+            stars = "⭐" * int(review.get("rating") or 0)
+            when = str(review.get("created_at", ""))[:10]
             st.markdown(
                 f"""
-**{review['name']}** — {verified_tag}  
-{stars}  
-{review['text']}  
+**{review.get('author') or 'Anonymous'}** — {verified_tag}  
+{stars}  {when}  
+{review.get('body', '')}  
 
-**Fit:** {review['fit']} | **Quality:** {review['quality']} | **Shipping:** {review['shipping']}
+**Fit:** {review.get('fit', '—')} | **Quality:** {review.get('quality', '—')} | **Shipping:** {review.get('shipping', '—')}
 """
             )
             st.divider()
 
-    # Leave a review form second
     st.subheader("Leave a review")
+    if not can_post:
+        st.info("Sign in to leave a review.")
+        return
 
-    st.markdown("### Select rating")
-    rating = st.slider("Rating", 1, 5, 5, key=f"rating_{product_id}")
-    st.write("⭐" * rating)
+    with st.form(key=f"review_form_{product_id}", clear_on_submit=True):
+        rating = st.slider("Rating", 1, 5, 5)
+        review_text = st.text_area("Tell others about your experience")
+        reviewer_name = st.text_input("Your name", value=user_name)
 
-    st.markdown("Tell others about your experience")
-    review_text = st.text_area(
-        "",
-        key=f"review_text_{product_id}"
-    )
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            fit = st.selectbox("Fit", ["Poor", "Okay", "Good", "Excellent"], index=2)
+        with d2:
+            quality = st.selectbox("Quality", ["Poor", "Okay", "Good", "Excellent"], index=2)
+        with d3:
+            shipping = st.selectbox("Shipping", ["Slow", "On time", "Fast"], index=1)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        reviewer_name = st.text_input("Your name", key=f"name_{product_id}")
-    with col2:
-        reviewer_email = st.text_input("Your email", key=f"email_{product_id}")
+        submitted = st.form_submit_button("Submit review")
 
-    st.markdown("## Review details")
-    d1, d2, d3 = st.columns(3)
-
-    with d1:
-        fit = st.selectbox(
-            "Fit",
-            ["Poor", "Okay", "Good", "Excellent"],
-            key=f"fit_{product_id}"
-        )
-
-    with d2:
-        quality = st.selectbox(
-            "Quality",
-            ["Poor", "Okay", "Good", "Excellent"],
-            key=f"quality_{product_id}"
-        )
-
-    with d3:
-        shipping = st.selectbox(
-            "Shipping",
-            ["Slow", "On time", "Fast"],
-            key=f"shipping_{product_id}"
-        )
-
-    verified = st.checkbox("Verified purchase", key=f"verified_{product_id}")
-
-    if st.button("Submit review", key=f"submit_review_{product_id}"):
-        if review_text.strip() and reviewer_name.strip():
-            st.session_state.reviews[product_id].append({
-                "name": reviewer_name,
-                "email": reviewer_email,
-                "rating": rating,
-                "text": review_text,
-                "verified": verified,
-                "fit": fit,
-                "quality": quality,
-                "shipping": shipping,
-            })
-            st.success("Review submitted!")
+    if submitted:
+        try:
+            saved, message = data_fetcher.add_review(
+                product_id, user_id, reviewer_name, rating, review_text,
+                fit=fit, quality=quality, shipping=shipping,
+            )
+        except Exception as e:
+            saved, message = False, f"Could not save your review: {e}"
+        if saved:
+            st.success(message)
             st.rerun()
         else:
-            st.warning("Please enter your name and your review before submitting.")
+            st.warning(message)
 
 # ---------------------------
 # Cart UI
@@ -741,7 +718,7 @@ def display_recommendation_cards(recommendations, products, cart):
 # Q&A 
 # ==============================
 
-def display_qa_section(product_id: str, current_user: str = "guest"):
+def display_qa_section(product_id: str, current_user: str = "guest", can_post: bool = True):
     """
     Full Q&A section for a product detail page.
     Styled to match the existing boutique hat-shop design.
@@ -761,19 +738,22 @@ def display_qa_section(product_id: str, current_user: str = "guest"):
     st.subheader("Questions & Answers")
 
     # ── Ask a question ──
-    with st.form(key=f"qa_ask_{product_id}", clear_on_submit=True):
-        new_q = st.text_area(
-            "Have a question about this product?",
-            height=80,
-            placeholder="e.g. Does this hat run small? Is it waterproof?",
-        )
-        if st.form_submit_button("Submit Question"):
-            if new_q.strip():
-                add_question(product_id, new_q.strip(), current_user)
-                st.success("Your question has been posted!")
-                st.rerun()
-            else:
-                st.warning("Please enter a question before submitting.")
+    if can_post:
+        with st.form(key=f"qa_ask_{product_id}", clear_on_submit=True):
+            new_q = st.text_area(
+                "Have a question about this product?",
+                height=80,
+                placeholder="e.g. Does this hat run small? Is it waterproof?",
+            )
+            if st.form_submit_button("Submit Question"):
+                if new_q.strip():
+                    add_question(product_id, new_q.strip(), current_user)
+                    st.success("Your question has been posted!")
+                    st.rerun()
+                else:
+                    st.warning("Please enter a question before submitting.")
+    else:
+        st.info("Sign in to ask a question.")
 
     st.markdown("---")
 
@@ -830,27 +810,29 @@ def display_qa_section(product_id: str, current_user: str = "guest"):
                         )
 
                     # Reply form
-                    with st.expander("↩ Reply to this answer", expanded=False):
-                        with st.form(key=f"qa_reply_{a_id}", clear_on_submit=True):
-                            reply_text = st.text_input("Your reply")
-                            if st.form_submit_button("Post Reply"):
-                                if reply_text.strip():
-                                    add_reply(a_id, reply_text.strip(), current_user)
-                                    st.rerun()
-                                else:
-                                    st.warning("Reply cannot be empty.")
+                    if can_post:
+                        with st.expander("↩ Reply to this answer", expanded=False):
+                            with st.form(key=f"qa_reply_{a_id}", clear_on_submit=True):
+                                reply_text = st.text_input("Your reply")
+                                if st.form_submit_button("Post Reply"):
+                                    if reply_text.strip():
+                                        add_reply(a_id, reply_text.strip(), current_user)
+                                        st.rerun()
+                                    else:
+                                        st.warning("Reply cannot be empty.")
             else:
                 st.caption("_No answers yet._")
 
             # Answer form
-            with st.expander("✍️ Answer this question", expanded=False):
-                with st.form(key=f"qa_answer_{q_id}", clear_on_submit=True):
-                    answer_text = st.text_area("Your answer", height=80)
-                    if st.form_submit_button("Post Answer"):
-                        if answer_text.strip():
-                            add_answer(q_id, answer_text.strip(), current_user)
-                            st.rerun()
-                        else:
-                            st.warning("Answer cannot be empty.")
+            if can_post:
+                with st.expander("✍️ Answer this question", expanded=False):
+                    with st.form(key=f"qa_answer_{q_id}", clear_on_submit=True):
+                        answer_text = st.text_area("Your answer", height=80)
+                        if st.form_submit_button("Post Answer"):
+                            if answer_text.strip():
+                                add_answer(q_id, answer_text.strip(), current_user)
+                                st.rerun()
+                            else:
+                                st.warning("Answer cannot be empty.")
 
         st.markdown("---")

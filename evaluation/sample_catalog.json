@@ -1,0 +1,191 @@
+[
+  {
+    "product_id": "s01",
+    "name": "Black Snapback",
+    "style": "Snapback",
+    "color": "Black",
+    "price": 45,
+    "stock": 10,
+    "description": "Sample black snapback (synthetic test data)"
+  },
+  {
+    "product_id": "s02",
+    "name": "Red Snapback",
+    "style": "Snapback",
+    "color": "Red",
+    "price": 45,
+    "stock": 10,
+    "description": "Sample red snapback (synthetic test data)"
+  },
+  {
+    "product_id": "s03",
+    "name": "Blue Snapback",
+    "style": "Snapback",
+    "color": "Blue",
+    "price": 45,
+    "stock": 10,
+    "description": "Sample blue snapback (synthetic test data)"
+  },
+  {
+    "product_id": "s04",
+    "name": "White Snapback",
+    "style": "Snapback",
+    "color": "White",
+    "price": 42,
+    "stock": 10,
+    "description": "Sample white snapback (synthetic test data)"
+  },
+  {
+    "product_id": "s05",
+    "name": "Green Snapback",
+    "style": "Snapback",
+    "color": "Green",
+    "price": 44,
+    "stock": 10,
+    "description": "Sample green snapback (synthetic test data)"
+  },
+  {
+    "product_id": "s06",
+    "name": "Blue Fitted",
+    "style": "Fitted",
+    "color": "Blue",
+    "price": 60,
+    "stock": 10,
+    "description": "Sample blue fitted (synthetic test data)"
+  },
+  {
+    "product_id": "s07",
+    "name": "Black Fitted",
+    "style": "Fitted",
+    "color": "Black",
+    "price": 60,
+    "stock": 10,
+    "description": "Sample black fitted (synthetic test data)"
+  },
+  {
+    "product_id": "s08",
+    "name": "Red Fitted",
+    "style": "Fitted",
+    "color": "Red",
+    "price": 58,
+    "stock": 10,
+    "description": "Sample red fitted (synthetic test data)"
+  },
+  {
+    "product_id": "s09",
+    "name": "Navy Fitted",
+    "style": "Fitted",
+    "color": "Navy",
+    "price": 62,
+    "stock": 10,
+    "description": "Sample navy fitted (synthetic test data)"
+  },
+  {
+    "product_id": "s10",
+    "name": "Black Trucker",
+    "style": "Trucker",
+    "color": "Black",
+    "price": 48,
+    "stock": 10,
+    "description": "Sample black trucker (synthetic test data)"
+  },
+  {
+    "product_id": "s11",
+    "name": "Brown Trucker",
+    "style": "Trucker",
+    "color": "Brown",
+    "price": 48,
+    "stock": 10,
+    "description": "Sample brown trucker (synthetic test data)"
+  },
+  {
+    "product_id": "s12",
+    "name": "Green Trucker",
+    "style": "Trucker",
+    "color": "Green",
+    "price": 46,
+    "stock": 10,
+    "description": "Sample green trucker (synthetic test data)"
+  },
+  {
+    "product_id": "s13",
+    "name": "Beige Dad Hat",
+    "style": "Dad Hat",
+    "color": "Beige",
+    "price": 32,
+    "stock": 10,
+    "description": "Sample beige dad hat (synthetic test data)"
+  },
+  {
+    "product_id": "s14",
+    "name": "Navy Dad Hat",
+    "style": "Dad Hat",
+    "color": "Navy",
+    "price": 32,
+    "stock": 10,
+    "description": "Sample navy dad hat (synthetic test data)"
+  },
+  {
+    "product_id": "s15",
+    "name": "Black Dad Hat",
+    "style": "Dad Hat",
+    "color": "Black",
+    "price": 30,
+    "stock": 10,
+    "description": "Sample black dad hat (synthetic test data)"
+  },
+  {
+    "product_id": "s16",
+    "name": "Black Bucket",
+    "style": "Bucket",
+    "color": "Black",
+    "price": 38,
+    "stock": 10,
+    "description": "Sample black bucket (synthetic test data)"
+  },
+  {
+    "product_id": "s17",
+    "name": "White Bucket",
+    "style": "Bucket",
+    "color": "White",
+    "price": 38,
+    "stock": 10,
+    "description": "Sample white bucket (synthetic test data)"
+  },
+  {
+    "product_id": "s18",
+    "name": "Beige Bucket",
+    "style": "Bucket",
+    "color": "Beige",
+    "price": 36,
+    "stock": 10,
+    "description": "Sample beige bucket (synthetic test data)"
+  },
+  {
+    "product_id": "s19",
+    "name": "Black Beanie",
+    "style": "Beanie",
+    "color": "Black",
+    "price": 28,
+    "stock": 10,
+    "description": "Sample black beanie (synthetic test data)"
+  },
+  {
+    "product_id": "s20",
+    "name": "Navy Beanie",
+    "style": "Beanie",
+    "color": "Navy",
+    "price": 28,
+    "stock": 10,
+    "description": "Sample navy beanie (synthetic test data)"
+  },
+  {
+    "product_id": "s21",
+    "name": "Red Beanie",
+    "style": "Beanie",
+    "color": "Red",
+    "price": 28,
+    "stock": 10,
+    "description": "Sample red beanie (synthetic test data)"
+  }
+]

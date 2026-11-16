@@ -1,0 +1,7 @@
+.git
+.github
+.streamlit/secrets.toml
+__pycache__
+*.pdf
+mockups
+unit 4 deliverables

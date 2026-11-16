@@ -149,5 +149,49 @@ class TestDataFetcher(unittest.TestCase):
         self.assertEqual(data_fetcher.place_order("u", {"h1": 1}), [])
         mock_create.assert_called_once_with("u", "h1", 1)
 
+    # ---------------- reviews ----------------
+    @patch('data_fetcher.run_dml')
+    @patch('data_fetcher.ensure_reviews_table')
+    def test_add_review_saves(self, mock_ensure, mock_dml):
+        mock_dml.return_value = 1
+        saved, msg = data_fetcher.add_review("h1", "ann@fisk.edu", "Ann", 5, "Great hat")
+        self.assertTrue(saved)
+        params = {p.name: p.value for p in mock_dml.call_args[0][1]}
+        self.assertEqual(params["user_id"], "ann@fisk.edu")
+        self.assertTrue(params["one_per_user"])
+
+    @patch('data_fetcher.run_dml')
+    @patch('data_fetcher.ensure_reviews_table')
+    def test_add_review_duplicate_is_rejected(self, mock_ensure, mock_dml):
+        mock_dml.return_value = 0
+        saved, msg = data_fetcher.add_review("h1", "ann@fisk.edu", "Ann", 4, "Nice")
+        self.assertFalse(saved)
+        self.assertIn("already reviewed", msg)
+
+    @patch('data_fetcher.run_dml')
+    @patch('data_fetcher.ensure_reviews_table')
+    def test_guest_account_may_post_repeatedly(self, mock_ensure, mock_dml):
+        mock_dml.return_value = 1
+        data_fetcher.add_review("h1", "user1", "Guest", 3, "Ok")
+        params = {p.name: p.value for p in mock_dml.call_args[0][1]}
+        self.assertFalse(params["one_per_user"])
+
+    @patch('data_fetcher.run_dml')
+    @patch('data_fetcher.ensure_reviews_table')
+    def test_add_review_validates_input(self, mock_ensure, mock_dml):
+        self.assertFalse(data_fetcher.add_review("h1", "u", "Ann", 0, "x")[0])
+        self.assertFalse(data_fetcher.add_review("h1", "u", "Ann", 6, "x")[0])
+        self.assertFalse(data_fetcher.add_review("h1", "u", "Ann", "abc", "x")[0])
+        self.assertFalse(data_fetcher.add_review("h1", "u", "Ann", 5, "   ")[0])
+        self.assertFalse(data_fetcher.add_review("h1", "u", "", 5, "text")[0])
+        self.assertFalse(data_fetcher.add_review("h1", "u", "Ann", 5, "x" * 2001)[0])
+        mock_dml.assert_not_called()
+
+    @patch('data_fetcher.run_query')
+    @patch('data_fetcher.ensure_reviews_table')
+    def test_get_reviews_queries_by_product(self, mock_ensure, mock_query):
+        mock_query.return_value = [{"review_id": "r1", "rating": 5}]
+        self.assertEqual(data_fetcher.get_reviews("h1")[0]["review_id"], "r1")
+
 if __name__ == "__main__":
     unittest.main()

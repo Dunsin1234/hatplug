@@ -1,0 +1,416 @@
+[
+  {
+    "id": "cold_start",
+    "label": "No history at all",
+    "owns": [],
+    "likes": {
+      "styles": [],
+      "colors": []
+    }
+  },
+  {
+    "id": "snapback_loyalist",
+    "label": "Two snapbacks in different colors",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Red"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Snapback"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "fitted_collector",
+    "label": "Two fitted caps",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Blue"
+      },
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Fitted"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "trucker_summer",
+    "label": "Two truckers",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Brown"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Trucker"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "dad_hat_casual",
+    "label": "One dad hat",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Dad Hat",
+        "color": "Beige"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Dad Hat"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "bucket_streetwear",
+    "label": "One bucket hat",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Bucket",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Bucket"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "beanie_winter",
+    "label": "One beanie",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Beanie",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Beanie"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "red_lover",
+    "label": "Red snapback and red fitted",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Red"
+      },
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Red"
+      }
+    ],
+    "likes": {
+      "styles": [],
+      "colors": [
+        "Red"
+      ]
+    }
+  },
+  {
+    "id": "black_on_black",
+    "label": "Black across three styles",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [],
+      "colors": [
+        "Black"
+      ]
+    }
+  },
+  {
+    "id": "blue_navy",
+    "label": "Blue fitted and navy dad hat",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Blue"
+      },
+      {
+        "where": "order",
+        "style": "Dad Hat",
+        "color": "Navy"
+      }
+    ],
+    "likes": {
+      "styles": [],
+      "colors": [
+        "Blue",
+        "Navy"
+      ]
+    }
+  },
+  {
+    "id": "earth_tones",
+    "label": "Brown trucker and beige dad hat",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Brown"
+      },
+      {
+        "where": "order",
+        "style": "Dad Hat",
+        "color": "Beige"
+      }
+    ],
+    "likes": {
+      "styles": [],
+      "colors": [
+        "Brown",
+        "Beige"
+      ]
+    }
+  },
+  {
+    "id": "cart_only_snapback",
+    "label": "Only a snapback in the cart",
+    "owns": [
+      {
+        "where": "cart",
+        "style": "Snapback",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Snapback"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "order_only_fitted",
+    "label": "Only a past fitted order",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Navy"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Fitted"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "mixed_cart_and_orders",
+    "label": "Trucker in cart, trucker ordered before",
+    "owns": [
+      {
+        "where": "cart",
+        "style": "Trucker",
+        "color": "Brown"
+      },
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Trucker"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "heavy_buyer",
+    "label": "Five items, mostly snapbacks",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Red"
+      },
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Blue"
+      },
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Black"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Snapback"
+      ],
+      "colors": []
+    }
+  },
+  {
+    "id": "white_hats",
+    "label": "White bucket and white snapback",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Bucket",
+        "color": "White"
+      },
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "White"
+      }
+    ],
+    "likes": {
+      "styles": [],
+      "colors": [
+        "White"
+      ]
+    }
+  },
+  {
+    "id": "navy_fitted",
+    "label": "Navy fitted",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Navy"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Fitted"
+      ],
+      "colors": [
+        "Navy"
+      ]
+    }
+  },
+  {
+    "id": "trucker_green",
+    "label": "Green trucker",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Green"
+      }
+    ],
+    "likes": {
+      "styles": [
+        "Trucker"
+      ],
+      "colors": [
+        "Green"
+      ]
+    }
+  },
+  {
+    "id": "gift_shopper",
+    "label": "One of everything, no clear taste",
+    "owns": [
+      {
+        "where": "order",
+        "style": "Snapback",
+        "color": "Black"
+      },
+      {
+        "where": "order",
+        "style": "Fitted",
+        "color": "Red"
+      },
+      {
+        "where": "order",
+        "style": "Trucker",
+        "color": "Brown"
+      },
+      {
+        "where": "order",
+        "style": "Beanie",
+        "color": "Navy"
+      }
+    ],
+    "likes": {
+      "styles": [],
+      "colors": []
+    }
+  },
+  {
+    "id": "almost_everything_owned",
+    "label": "Owns all but two products (tests tiny candidate pool)",
+    "owns": [],
+    "likes": {
+      "styles": [],
+      "colors": []
+    },
+    "owns_all_but": 2
+  }
+]
